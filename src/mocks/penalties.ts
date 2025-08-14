@@ -38,5 +38,3 @@ export const updatePenaltyStatus = (id: string, status: Penalty['status']) => {
     mockPenaltiesState[index] = { ...mockPenaltiesState[index], status };
   }
 };
-
-export { mockPenaltiesState }
