@@ -78,5 +78,3 @@ export const addBooking = (booking: Omit<Booking, 'id' | 'created_at'>) => {
   mockBookingsState.push(newBooking);
   return newBooking;
 };
-
-export { mockBookingsState }
