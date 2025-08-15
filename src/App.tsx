@@ -4,10 +4,15 @@ import { Toaster } from './components/Toaster';
 import { AppShell } from './components/AppShell';
 import { Landing } from './pages/Landing';
 import { Auth } from './pages/auth/Auth';
+import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
+import { CheckinPortal } from './pages/staff/CheckinPortal';
 
 // Student Pages
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { LibraryBooking } from './pages/student/LibraryBooking';
+import { LabBooking } from './pages/student/LabBooking';
+import { MyBookings } from './pages/student/MyBookings';
+import { Penalties } from './pages/student/Penalties';
 
 // Protected Route Component
 import { getCurrentUser } from './mocks/users';
@@ -58,10 +63,7 @@ function App() {
             path="/student/lab" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">Lab Booking</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <LabBooking />
               </ProtectedRoute>
             } 
           />
@@ -69,10 +71,7 @@ function App() {
             path="/student/bookings" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">My Bookings</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <MyBookings />
               </ProtectedRoute>
             } 
           />
@@ -80,10 +79,7 @@ function App() {
             path="/student/penalties" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">Penalties</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <Penalties />
               </ProtectedRoute>
             } 
           />
@@ -93,10 +89,7 @@ function App() {
             path="/faculty" 
             element={
               <ProtectedRoute allowedRoles={['faculty']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">Faculty Dashboard</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <FacultyDashboard />
               </ProtectedRoute>
             } 
           />
@@ -106,10 +99,7 @@ function App() {
             path="/staff/checkin" 
             element={
               <ProtectedRoute allowedRoles={['staff']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">Check-in Portal</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <CheckinPortal />
               </ProtectedRoute>
             } 
           />
