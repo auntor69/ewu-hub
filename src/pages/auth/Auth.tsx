@@ -6,8 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { mockApi } from '../../lib/mockApi';
-import { setCurrentUser } from '../../mocks/users';
+import { AuthService } from '../../lib/auth';
 import { useToast } from '../../hooks/useToast';
 import { Role } from '../../lib/types';
 
@@ -55,18 +54,30 @@ export function Auth() {
     setLoading(true);
     
     try {
-      const user = await mockApi.signIn(signInData.email, signInData.password);
-      setCurrentUser(user);
-      toast({
-        title: 'Welcome back!',
-        description: `Signed in as ${user.name}`,
-        variant: 'success',
-      });
-      navigate(`/${user.role}`);
+      const { user, error } = await AuthService.signIn(signInData);
+      
+      if (error) {
+        toast({
+          title: 'Sign in failed',
+          description: error,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (user) {
+        AuthService.setCurrentUser(user);
+        toast({
+          title: 'Welcome back!',
+          description: `Signed in as ${user.name}`,
+          variant: 'success',
+        });
+        navigate(`/${user.role}`);
+      }
     } catch (error) {
       toast({
         title: 'Sign in failed',
-        description: 'Invalid credentials. Try demo accounts.',
+        description: 'Please try again',
         variant: 'destructive',
       });
     } finally {
@@ -82,18 +93,26 @@ export function Auth() {
     setLoading(true);
     
     try {
-      const user = await mockApi.signUp({
-        name: signUpData.name,
-        email: signUpData.email,
-        role: signUpData.role,
-      });
-      setCurrentUser(user);
-      toast({
-        title: 'Account created!',
-        description: `Welcome to EWU Hub, ${user.name}`,
-        variant: 'success',
-      });
-      navigate(`/${user.role}`);
+      const { user, error } = await AuthService.signUp(signUpData);
+      
+      if (error) {
+        toast({
+          title: 'Sign up failed',
+          description: error,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (user) {
+        AuthService.setCurrentUser(user);
+        toast({
+          title: 'Account created!',
+          description: `Welcome to EWU Hub, ${user.name}`,
+          variant: 'success',
+        });
+        navigate(`/${user.role}`);
+      }
     } catch (error) {
       toast({
         title: 'Sign up failed',
@@ -177,17 +196,6 @@ export function Auth() {
                     {loading ? 'Signing In...' : 'Sign In'}
                   </Button>
                 </form>
-
-                <div className="text-center text-sm text-slate-500 space-y-2">
-                  <p>Demo accounts:</p>
-                  <div className="text-xs space-y-1">
-                    <p>Student: ahmed.rahman@student.ewu.edu</p>
-                    <p>Faculty: mohammad.ali@ewu.edu</p>
-                    <p>Staff: sarah.ahmed@ewu.edu</p>
-                    <p>Admin: admin@ewu.edu</p>
-                    <p className="font-medium">Password: demo123</p>
-                  </div>
-                </div>
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">
@@ -286,7 +294,7 @@ export function Auth() {
         </Card>
 
         <p className="text-center text-xs text-slate-500 mt-6">
-          Demo environment • No real data yet
+          Connect with your EWU credentials
         </p>
       </div>
     </div>

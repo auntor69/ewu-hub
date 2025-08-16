@@ -2,10 +2,15 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/Toaster';
 import { AppShell } from './components/AppShell';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Landing } from './pages/Landing';
 import { Auth } from './pages/auth/Auth';
 import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
+import { BookRoom } from './pages/faculty/BookRoom';
+import { MyClasses } from './pages/faculty/MyClasses';
 import { CheckinPortal } from './pages/staff/CheckinPortal';
+import { TodaySchedule } from './pages/staff/TodaySchedule';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
 
 // Student Pages
 import { StudentDashboard } from './pages/student/StudentDashboard';
@@ -13,23 +18,6 @@ import { LibraryBooking } from './pages/student/LibraryBooking';
 import { LabBooking } from './pages/student/LabBooking';
 import { MyBookings } from './pages/student/MyBookings';
 import { Penalties } from './pages/student/Penalties';
-
-// Protected Route Component
-import { getCurrentUser } from './mocks/users';
-
-function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) {
-  const currentUser = getCurrentUser();
-  
-  if (!currentUser) {
-    return <Navigate to="/auth" replace />;
-  }
-  
-  if (!allowedRoles.includes(currentUser.role)) {
-    return <Navigate to={`/${currentUser.role}`} replace />;
-  }
-  
-  return <AppShell>{children}</AppShell>;
-}
 
 function App() {
   return (
@@ -45,7 +33,9 @@ function App() {
             path="/student" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <StudentDashboard />
+                <AppShell>
+                  <StudentDashboard />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -53,17 +43,19 @@ function App() {
             path="/student/library" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <LibraryBooking />
+                <AppShell>
+                  <LibraryBooking />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
-          
-          {/* Placeholder routes for other pages */}
           <Route 
             path="/student/lab" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <LabBooking />
+                <AppShell>
+                  <LabBooking />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -71,7 +63,9 @@ function App() {
             path="/student/bookings" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <MyBookings />
+                <AppShell>
+                  <MyBookings />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -79,7 +73,9 @@ function App() {
             path="/student/penalties" 
             element={
               <ProtectedRoute allowedRoles={['student']}>
-                <Penalties />
+                <AppShell>
+                  <Penalties />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -89,7 +85,29 @@ function App() {
             path="/faculty" 
             element={
               <ProtectedRoute allowedRoles={['faculty']}>
-                <FacultyDashboard />
+                <AppShell>
+                  <FacultyDashboard />
+                </AppShell>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/faculty/book" 
+            element={
+              <ProtectedRoute allowedRoles={['faculty']}>
+                <AppShell>
+                  <BookRoom />
+                </AppShell>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/faculty/classes" 
+            element={
+              <ProtectedRoute allowedRoles={['faculty']}>
+                <AppShell>
+                  <MyClasses />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -99,7 +117,19 @@ function App() {
             path="/staff/checkin" 
             element={
               <ProtectedRoute allowedRoles={['staff']}>
-                <CheckinPortal />
+                <AppShell>
+                  <CheckinPortal />
+                </AppShell>
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/staff/today" 
+            element={
+              <ProtectedRoute allowedRoles={['staff']}>
+                <AppShell>
+                  <TodaySchedule />
+                </AppShell>
               </ProtectedRoute>
             } 
           />
@@ -109,10 +139,9 @@ function App() {
             path="/admin" 
             element={
               <ProtectedRoute allowedRoles={['admin']}>
-                <div className="text-center py-20">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">Admin Dashboard</h1>
-                  <p className="text-slate-600">Coming in next iteration...</p>
-                </div>
+                <AppShell>
+                  <AdminDashboard />
+                </AppShell>
               </ProtectedRoute>
             } 
           />

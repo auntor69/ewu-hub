@@ -6,12 +6,11 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { mockApi } from '../../lib/mockApi';
-import { getCurrentUser } from '../../mocks/users';
-import { mockRooms } from '../../mocks/rooms';
-import { mockEquipmentTypes, mockEquipmentUnits } from '../../mocks/equipment';
+import { BookingService, ResourceService } from '../../lib/api';
+import { AuthService } from '../../lib/auth';
 import { useToast } from '../../hooks/useToast';
 import { cn, formatDate, formatTime } from '../../lib/utils';
+import { Room, EquipmentType, EquipmentUnit } from '../../lib/types';
 
 interface BookingStep1Data {
   date: string;
@@ -36,12 +35,15 @@ const hours = Array.from({ length: 12 }, (_, i) => {
 export function LabBooking() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const currentUser = getCurrentUser();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([]);
+  const [equipmentUnits, setEquipmentUnits] = useState<EquipmentUnit[]>([]);
 
   const [step1Data, setStep1Data] = useState<BookingStep1Data>({
     date: '',
@@ -60,14 +62,38 @@ export function LabBooking() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const labRooms = mockRooms.filter(r => r.type === 'lab');
-  const selectedRoom = labRooms.find(r => r.id === step2Data.room);
-  const availableEquipmentTypes = mockEquipmentTypes;
-  const availableUnits = mockEquipmentUnits.filter(u => 
-    u.room_id === step2Data.room && 
-    u.equipment_type_id === step3Data.equipmentType &&
-    u.status === 'available'
-  );
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const [roomsData, typesData] = await Promise.all([
+        ResourceService.listRooms('lab'),
+        ResourceService.listEquipmentTypes(),
+      ]);
+      setRooms(roomsData);
+      setEquipmentTypes(typesData);
+    };
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (step2Data.room && step3Data.equipmentType) {
+      const loadUnits = async () => {
+        const unitsData = await ResourceService.listEquipmentUnits(step2Data.room, step3Data.equipmentType);
+        setEquipmentUnits(unitsData);
+      };
+      loadUnits();
+    }
+  }, [step2Data.room, step3Data.equipmentType]);
+
+  const selectedRoom = rooms.find(r => r.id === step2Data.room);
+  const availableUnits = equipmentUnits.filter(u => u.status === 'available');
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
@@ -134,27 +160,23 @@ export function LabBooking() {
 
     setLoading(true);
     try {
-      const selectedEquipmentType = mockEquipmentTypes.find(t => t.id === step3Data.equipmentType);
-      const selectedUnit = mockEquipmentUnits.find(u => u.id === step3Data.equipmentUnit);
-      
-      const code = Math.random().toString(36).substring(2, 12).toUpperCase();
-
-      await mockApi.createBooking({
-        user_id: currentUser.id,
-        resource_kind: 'equipment_unit',
-        resource_id: step3Data.equipmentUnit,
-        resource_details: {
-          room: selectedRoom?.code,
-          equipment: selectedEquipmentType?.name,
-          unit: selectedUnit?.asset_tag,
-        },
+      const bookingData = {
         date: step1Data.date,
         start_time: step1Data.hour,
         end_time: `${parseInt(step1Data.hour.split(':')[0]) + 1}:00`,
-        status: 'confirmed',
+        room_id: step2Data.room,
+        equipment_type_id: step3Data.equipmentType,
+        equipment_unit_id: step3Data.equipmentUnit,
         notes: step3Data.notes,
-      });
+      };
 
+      const booking = await BookingService.createLabBooking(bookingData, currentUser.id);
+      
+      if (!booking) {
+        throw new Error('Failed to create booking');
+      }
+
+      const code = Math.random().toString(36).substring(2, 12).toUpperCase();
       setGeneratedCode(code);
       setShowSuccessModal(true);
       
@@ -304,7 +326,7 @@ export function LabBooking() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
-              {labRooms.map((room) => (
+              {rooms.map((room) => (
                 <Card
                   key={room.id}
                   className={cn(
@@ -377,7 +399,7 @@ export function LabBooking() {
                   className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">Select equipment type</option>
-                  {availableEquipmentTypes.map((type) => (
+                  {equipmentTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name} - {type.category}
                     </option>
@@ -406,7 +428,7 @@ export function LabBooking() {
                             <div>
                               <div className="font-medium text-sm">{unit.asset_tag}</div>
                               <div className="text-xs text-slate-500">
-                                {mockEquipmentTypes.find(t => t.id === unit.equipment_type_id)?.name}
+                                {equipmentTypes.find(t => t.id === unit.equipment_type_id)?.name}
                               </div>
                             </div>
                             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -462,13 +484,13 @@ export function LabBooking() {
                 <div>
                   <div className="text-sm text-slate-600 mb-1">Equipment</div>
                   <div className="font-medium">
-                    {mockEquipmentTypes.find(t => t.id === step3Data.equipmentType)?.name}
+                    {equipmentTypes.find(t => t.id === step3Data.equipmentType)?.name}
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-slate-600 mb-1">Unit</div>
                   <div className="font-medium">
-                    {mockEquipmentUnits.find(u => u.id === step3Data.equipmentUnit)?.asset_tag}
+                    {equipmentUnits.find(u => u.id === step3Data.equipmentUnit)?.asset_tag}
                   </div>
                 </div>
               </div>

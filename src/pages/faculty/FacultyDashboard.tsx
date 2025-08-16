@@ -5,22 +5,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button';
 import { StatTile } from '../../components/StatTile';
 import { BookingCard } from '../../components/BookingCard';
-import { mockApi } from '../../lib/mockApi';
-import { getCurrentUser } from '../../mocks/users';
+import { BookingService } from '../../lib/api';
+import { AuthService } from '../../lib/auth';
 import { Booking } from '../../lib/types';
 
 export function FacultyDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const currentUser = getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       if (!currentUser) return;
       
       try {
-        const bookingsData = await mockApi.listBookings(currentUser.id);
+        const bookingsData = await BookingService.listBookings(currentUser.id);
         setBookings(bookingsData);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);

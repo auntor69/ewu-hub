@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Copy, Eye, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { DataTable, Column } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -13,7 +12,7 @@ import { Booking } from '../../lib/types';
 import { useToast } from '../../hooks/useToast';
 import { formatDate, formatTime } from '../../lib/utils';
 
-export function MyBookings() {
+export function MyClasses() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -35,7 +34,9 @@ export function MyBookings() {
       
       try {
         const data = await BookingService.listBookings(currentUser.id);
-        setBookings(data);
+        // Filter for room bookings only
+        const roomBookings = data.filter(b => b.resource_kind === 'room');
+        setBookings(roomBookings);
       } catch (error) {
         console.error('Failed to load bookings:', error);
       } finally {
@@ -56,8 +57,8 @@ export function MyBookings() {
         ));
         setShowCancelDialog(null);
         toast({
-          title: 'Booking cancelled',
-          description: 'Your booking has been successfully cancelled',
+          title: 'Class cancelled',
+          description: 'Your room booking has been successfully cancelled',
           variant: 'success',
         });
       } else {
@@ -81,50 +82,11 @@ export function MyBookings() {
     });
   };
 
-  const getResourceDisplay = (booking: Booking) => {
-    switch (booking.resource_kind) {
-      case 'library_seat':
-        return {
-          type: 'Library Seat',
-          details: `${booking.resource_details.table} - ${booking.resource_details.seat || booking.resource_details.seats?.join(', ')}`,
-          location: booking.resource_details.room,
-        };
-      case 'equipment_unit':
-        return {
-          type: 'Lab Equipment',
-          details: `${booking.resource_details.equipment} (${booking.resource_details.unit})`,
-          location: booking.resource_details.room,
-        };
-      case 'room':
-        return {
-          type: 'Room Booking',
-          details: `Capacity: ${booking.resource_details.capacity}`,
-          location: booking.resource_details.room,
-        };
-      default:
-        return {
-          type: 'Resource',
-          details: '',
-          location: '',
-        };
-    }
-  };
-
   const columns: Column<Booking>[] = [
     {
-      key: 'resource_kind',
-      header: 'Type',
-      render: (booking) => getResourceDisplay(booking).type,
-    },
-    {
       key: 'resource_details',
-      header: 'Location',
-      render: (booking) => getResourceDisplay(booking).location,
-    },
-    {
-      key: 'resource_details',
-      header: 'Details',
-      render: (booking) => getResourceDisplay(booking).details,
+      header: 'Room',
+      render: (booking) => booking.resource_details?.room || 'N/A',
     },
     {
       key: 'date',
@@ -136,6 +98,16 @@ export function MyBookings() {
       key: 'start_time',
       header: 'Time',
       render: (booking) => `${formatTime(booking.start_time)} - ${formatTime(booking.end_time)}`,
+    },
+    {
+      key: 'resource_details',
+      header: 'Duration',
+      render: (booking) => {
+        const start = new Date(`2000-01-01T${booking.start_time}:00`);
+        const end = new Date(`2000-01-01T${booking.end_time}:00`);
+        const duration = (end.getTime() - start.getTime()) / (1000 * 60);
+        return `${duration} min`;
+      },
     },
     {
       key: 'status',
@@ -162,27 +134,6 @@ export function MyBookings() {
       ),
     },
   ];
-
-  const getFilteredBookings = (filter: string) => {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    
-    switch (filter) {
-      case 'upcoming':
-        return bookings.filter(b => 
-          (b.date > today || (b.date === today && b.start_time > now.toTimeString().substring(0, 5))) &&
-          ['confirmed', 'pending'].includes(b.status)
-        );
-      case 'past':
-        return bookings.filter(b => 
-          b.date < today || 
-          (b.date === today && b.start_time <= now.toTimeString().substring(0, 5)) ||
-          ['completed', 'cancelled', 'no_show'].includes(b.status)
-        );
-      default:
-        return bookings;
-    }
-  };
 
   const renderActions = (booking: Booking) => (
     <div className="flex items-center space-x-2">
@@ -220,78 +171,34 @@ export function MyBookings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">My Bookings</h1>
-        <p className="text-slate-600">View and manage your reservations</p>
+        <h1 className="text-3xl font-bold text-slate-900">My Classes</h1>
+        <p className="text-slate-600">View and manage your room bookings</p>
       </div>
 
-      <Tabs defaultValue="all" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="all">All Bookings</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all">
-          <DataTable
-            data={getFilteredBookings('all')}
-            columns={columns}
-            actions={renderActions}
-            emptyState={
-              <EmptyState
-                icon={Calendar}
-                title="No bookings yet"
-                description="Start by reserving a library seat or lab equipment."
-                action={{
-                  label: 'Book Library',
-                  onClick: () => window.location.href = '/student/library'
-                }}
-              />
-            }
+      <DataTable
+        data={bookings}
+        columns={columns}
+        actions={renderActions}
+        emptyState={
+          <EmptyState
+            icon={Calendar}
+            title="No classes booked"
+            description="You haven't booked any rooms yet. Reserve additional classroom time for extended sessions."
+            action={{
+              label: 'Book Room',
+              onClick: () => window.location.href = '/faculty/book'
+            }}
           />
-        </TabsContent>
-
-        <TabsContent value="upcoming">
-          <DataTable
-            data={getFilteredBookings('upcoming')}
-            columns={columns}
-            actions={renderActions}
-            emptyState={
-              <EmptyState
-                icon={Calendar}
-                title="No upcoming bookings"
-                description="All your current bookings are in the past."
-                action={{
-                  label: 'Book Library',
-                  onClick: () => window.location.href = '/student/library'
-                }}
-              />
-            }
-          />
-        </TabsContent>
-
-        <TabsContent value="past">
-          <DataTable
-            data={getFilteredBookings('past')}
-            columns={columns}
-            actions={renderActions}
-            emptyState={
-              <EmptyState
-                icon={Clock}
-                title="No past bookings"
-                description="Your booking history will appear here."
-              />
-            }
-          />
-        </TabsContent>
-      </Tabs>
+        }
+      />
 
       {/* Booking Details Modal */}
       <Dialog open={!!selectedBooking} onOpenChange={() => setSelectedBooking(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Booking Details</DialogTitle>
+            <DialogTitle>Class Details</DialogTitle>
             <DialogDescription>
-              Complete information about your reservation
+              Complete information about your room booking
             </DialogDescription>
           </DialogHeader>
           
@@ -299,8 +206,8 @@ export function MyBookings() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="text-slate-600 mb-1">Type</div>
-                  <div className="font-medium">{getResourceDisplay(selectedBooking).type}</div>
+                  <div className="text-slate-600 mb-1">Room</div>
+                  <div className="font-medium">{selectedBooking.resource_details?.room}</div>
                 </div>
                 <div>
                   <div className="text-slate-600 mb-1">Status</div>
@@ -317,12 +224,8 @@ export function MyBookings() {
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <div className="text-slate-600 mb-1">Location</div>
-                  <div className="font-medium">{getResourceDisplay(selectedBooking).location}</div>
-                </div>
-                <div className="col-span-2">
-                  <div className="text-slate-600 mb-1">Details</div>
-                  <div className="font-medium">{getResourceDisplay(selectedBooking).details}</div>
+                  <div className="text-slate-600 mb-1">Purpose</div>
+                  <div className="font-medium">{selectedBooking.resource_details?.purpose || 'N/A'}</div>
                 </div>
               </div>
 
@@ -342,19 +245,6 @@ export function MyBookings() {
                 </div>
               )}
 
-              {selectedBooking.friends && selectedBooking.friends.length > 0 && (
-                <div>
-                  <div className="text-slate-600 mb-2">Friends</div>
-                  <div className="space-y-1">
-                    {selectedBooking.friends.map((friend, index) => (
-                      <div key={index} className="text-sm bg-slate-50 rounded px-2 py-1">
-                        {friend}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {selectedBooking.notes && (
                 <div>
                   <div className="text-slate-600 mb-1">Notes</div>
@@ -370,20 +260,20 @@ export function MyBookings() {
       <Dialog open={!!showCancelDialog} onOpenChange={() => setShowCancelDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Cancel Booking</DialogTitle>
+            <DialogTitle>Cancel Class</DialogTitle>
             <DialogDescription>
-              Are you sure you want to cancel this booking? This action cannot be undone.
+              Are you sure you want to cancel this room booking? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           
           {showCancelDialog && (
             <div className="space-y-4">
               <div className="p-3 bg-slate-50 rounded-lg text-sm">
-                <div className="font-medium">{getResourceDisplay(showCancelDialog).type}</div>
+                <div className="font-medium">Room: {showCancelDialog.resource_details?.room}</div>
                 <div className="text-slate-600">
                   {formatDate(showCancelDialog.date)} at {formatTime(showCancelDialog.start_time)}
                 </div>
-                <div className="text-slate-600">{getResourceDisplay(showCancelDialog).location}</div>
+                <div className="text-slate-600">Purpose: {showCancelDialog.resource_details?.purpose}</div>
               </div>
               
               <div className="flex justify-end space-x-2">
@@ -394,7 +284,7 @@ export function MyBookings() {
                   variant="destructive" 
                   onClick={() => handleCancelBooking(showCancelDialog)}
                 >
-                  Cancel Booking
+                  Cancel Class
                 </Button>
               </div>
             </div>

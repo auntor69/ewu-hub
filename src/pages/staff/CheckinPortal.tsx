@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { mockApi } from '../../lib/mockApi';
+import { BookingService } from '../../lib/api';
 import { useToast } from '../../hooks/useToast';
 import { Booking } from '../../lib/types';
 import { formatTime, formatDate } from '../../lib/utils';
@@ -23,7 +23,7 @@ export function CheckinPortal() {
     setResult(null);
 
     try {
-      const response = await mockApi.checkInWithCode(code.trim().toUpperCase());
+      const response = await BookingService.checkInWithCode(code.trim().toUpperCase());
       setResult(response);
       
       if (response.success) {

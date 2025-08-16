@@ -19,7 +19,7 @@ import {
   ChevronDown,
   X
 } from 'lucide-react';
-import { getCurrentUser, setCurrentUser } from '../mocks/users';
+import { AuthService } from '../lib/auth';
 import { Role } from '../lib/types';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -59,10 +59,17 @@ const navigation = {
 export function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   
-  const currentUser = getCurrentUser();
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
   
   if (!currentUser) {
     navigate('/auth');
@@ -72,7 +79,7 @@ export function AppShell({ children }: AppShellProps) {
   const userNavigation = navigation[currentUser.role] || [];
   
   const handleSignOut = () => {
-    setCurrentUser(null);
+    AuthService.signOut();
     navigate('/');
   };
 

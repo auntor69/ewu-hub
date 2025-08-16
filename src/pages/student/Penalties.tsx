@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DataTable, Column } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge';
 import { EmptyState } from '../../components/EmptyState';
-import { mockApi } from '../../lib/mockApi';
-import { getCurrentUser } from '../../mocks/users';
+import { PenaltyService } from '../../lib/api';
+import { AuthService } from '../../lib/auth';
 import { Penalty } from '../../lib/types';
 import { formatDateTime } from '../../lib/utils';
 
@@ -15,14 +15,22 @@ export function Penalties() {
   const [penalties, setPenalties] = useState<Penalty[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPenalty, setSelectedPenalty] = useState<Penalty | null>(null);
-  const currentUser = getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
 
   useEffect(() => {
     const loadPenalties = async () => {
       if (!currentUser) return;
       
       try {
-        const data = await mockApi.listPenalties(currentUser.id);
+        const data = await PenaltyService.listPenalties(currentUser.id);
         setPenalties(data);
       } catch (error) {
         console.error('Failed to load penalties:', error);

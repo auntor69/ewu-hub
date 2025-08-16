@@ -6,12 +6,11 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { mockApi } from '../../lib/mockApi';
-import { getCurrentUser } from '../../mocks/users';
-import { mockRooms } from '../../mocks/rooms';
-import { mockLibraryTables, mockLibrarySeats } from '../../mocks/library';
+import { BookingService, ResourceService } from '../../lib/api';
+import { AuthService } from '../../lib/auth';
 import { useToast } from '../../hooks/useToast';
 import { cn, formatDate, formatTime } from '../../lib/utils';
+import { Room, LibraryTable, LibrarySeat } from '../../lib/types';
 
 interface BookingStep1Data {
   date: string;
@@ -37,12 +36,15 @@ const hours = Array.from({ length: 12 }, (_, i) => {
 export function LibraryBooking() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const currentUser = getCurrentUser();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [tables, setTables] = useState<LibraryTable[]>([]);
+  const [seats, setSeats] = useState<LibrarySeat[]>([]);
 
   const [step1Data, setStep1Data] = useState<BookingStep1Data>({
     date: '',
@@ -62,10 +64,45 @@ export function LibraryBooking() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const libraryRooms = mockRooms.filter(r => r.type === 'library_zone');
-  const selectedRoom = libraryRooms.find(r => r.id === step2Data.room);
-  const availableTables = mockLibraryTables.filter(t => t.room_id === step2Data.room);
-  const selectedTableSeats = mockLibrarySeats.filter(s => s.table_id === step2Data.table);
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    const loadRooms = async () => {
+      const roomsData = await ResourceService.listRooms('library_zone');
+      setRooms(roomsData);
+    };
+    loadRooms();
+  }, []);
+
+  useEffect(() => {
+    if (step2Data.room) {
+      const loadTables = async () => {
+        const tablesData = await ResourceService.listLibraryTables(step2Data.room);
+        setTables(tablesData);
+      };
+      loadTables();
+    }
+  }, [step2Data.room]);
+
+  useEffect(() => {
+    if (step2Data.table) {
+      const loadSeats = async () => {
+        const seatsData = await ResourceService.listLibrarySeats(step2Data.table);
+        setSeats(seatsData);
+      };
+      loadSeats();
+    }
+  }, [step2Data.table]);
+
+  const selectedRoom = rooms.find(r => r.id === step2Data.room);
+  const availableTables = tables.filter(t => t.room_id === step2Data.room);
+  const selectedTableSeats = seats.filter(s => s.table_id === step2Data.table);
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
@@ -178,35 +215,28 @@ export function LibraryBooking() {
 
     setLoading(true);
     try {
-      const nonEmptyFriends = step3Data.friends.filter(f => f.trim());
-      const totalPeople = 1 + nonEmptyFriends.length;
-      
-      // Generate attendance codes for each seat/person
-      const codes = Array.from({ length: totalPeople }, () => 
-        Math.random().toString(36).substring(2, 12).toUpperCase()
-      );
-
-      await mockApi.createBooking({
-        user_id: currentUser.id,
-        resource_kind: 'library_seat',
-        resource_id: step2Data.selectedSeats[0], // Primary seat
-        resource_details: {
-          room: selectedRoom?.code,
-          table: `T${availableTables.find(t => t.id === step2Data.table)?.table_number}`,
-          seats: step2Data.selectedSeats.map(seatId => {
-            const seat = selectedTableSeats.find(s => s.id === seatId);
-            return `S${seat?.seat_number}`;
-          }),
-          totalSeats: step2Data.selectedSeats.length,
-        },
+      const bookingData = {
         date: step1Data.date,
         start_time: step1Data.hour,
         end_time: `${parseInt(step1Data.hour.split(':')[0]) + 1}:00`,
-        status: 'confirmed',
-        friends: nonEmptyFriends,
+        room_id: step2Data.room,
+        table_id: step2Data.table,
+        seat_ids: step2Data.selectedSeats,
+        friends: step3Data.friends.filter(f => f.trim()),
         notes: step3Data.notes,
-      });
+      };
 
+      const booking = await BookingService.createLibraryBooking(bookingData, currentUser.id);
+      
+      if (!booking) {
+        throw new Error('Failed to create booking');
+      }
+
+      // Generate codes for display
+      const totalPeople = 1 + bookingData.friends.length;
+      const codes = Array.from({ length: totalPeople }, () => 
+        Math.random().toString(36).substring(2, 12).toUpperCase()
+      );
       setGeneratedCodes(codes);
       setShowSuccessModal(true);
       
@@ -371,7 +401,7 @@ export function LibraryBooking() {
                   className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">Select a room</option>
-                  {libraryRooms.map((room) => (
+                  {rooms.map((room) => (
                     <option key={room.id} value={room.id}>
                       {room.code} - {room.name} (Capacity: {room.capacity})
                     </option>

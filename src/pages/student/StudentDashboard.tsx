@@ -5,16 +5,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button';
 import { StatTile } from '../../components/StatTile';
 import { BookingCard } from '../../components/BookingCard';
-import { mockApi } from '../../lib/mockApi';
-import { getCurrentUser } from '../../mocks/users';
+import { BookingService, PenaltyService } from '../../lib/api';
+import { AuthService } from '../../lib/auth';
 import { Booking, Penalty } from '../../lib/types';
 
 export function StudentDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  const currentUser = getCurrentUser();
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setCurrentUser(user);
+    };
+    loadUser();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -22,8 +29,8 @@ export function StudentDashboard() {
       
       try {
         const [bookingsData, penaltiesData] = await Promise.all([
-          mockApi.listBookings(currentUser.id),
-          mockApi.listPenalties(currentUser.id),
+          BookingService.listBookings(currentUser.id),
+          PenaltyService.listPenalties(currentUser.id),
         ]);
         
         setBookings(bookingsData);
