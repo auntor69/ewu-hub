@@ -65,8 +65,16 @@ export function BookRoom() {
 
   useEffect(() => {
     const loadRooms = async () => {
-      const roomsData = await ResourceService.listRooms('classroom');
-      setRooms(roomsData);
+      try {
+        const roomsData = await ResourceService.listRooms('classroom');
+        setRooms(roomsData);
+      } catch (error: any) {
+        toast({
+          title: 'Failed to load rooms',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     };
     loadRooms();
   }, []);
@@ -157,8 +165,7 @@ export function BookRoom() {
         throw new Error('Failed to create booking');
       }
 
-      const code = Math.random().toString(36).substring(2, 12).toUpperCase();
-      setGeneratedCode(code);
+      setGeneratedCode(booking.attendance_code);
       setShowSuccessModal(true);
       
       toast({
@@ -169,7 +176,7 @@ export function BookRoom() {
     } catch (error) {
       toast({
         title: 'Booking failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {

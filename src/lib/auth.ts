@@ -1,105 +1,95 @@
-import { supabase } from './supabase';
-import { UserProfile, LoginForm, RegisterForm } from './types';
+import { supabase } from './supabase'
+import { UserProfile, LoginForm, RegisterForm } from './types'
 
 export class AuthService {
-  // TODO: Connect to Supabase Auth
   static async signIn(credentials: LoginForm): Promise<{ user: UserProfile | null; error: string | null }> {
     try {
-      // const { data, error } = await supabase.auth.signInWithPassword({
-      //   email: credentials.email,
-      //   password: credentials.password,
-      // });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      })
       
-      // if (error) return { user: null, error: error.message };
+      if (error) return { user: null, error: error.message }
       
-      // const { data: profile } = await supabase
-      //   .from('profiles')
-      //   .select('*')
-      //   .eq('id', data.user.id)
-      //   .single();
+      // Get user profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', data.user.id)
+        .single()
       
-      // return { user: profile, error: null };
+      if (profileError) return { user: null, error: 'Profile not found' }
       
-      return { user: null, error: 'Authentication not implemented yet' };
-    } catch (error) {
-      return { user: null, error: 'Authentication failed' };
+      return { user: profile, error: null }
+    } catch (error: any) {
+      return { user: null, error: error.message }
     }
   }
 
   static async signUp(userData: RegisterForm): Promise<{ user: UserProfile | null; error: string | null }> {
     try {
-      // TODO: Connect to Supabase Auth
-      // const { data, error } = await supabase.auth.signUp({
-      //   email: userData.email,
-      //   password: userData.password,
-      // });
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+      })
       
-      // if (error) return { user: null, error: error.message };
+      if (error) return { user: null, error: error.message }
+      if (!data.user) return { user: null, error: 'Registration failed' }
       
-      // const profile = {
-      //   id: data.user.id,
-      //   name: userData.name,
-      //   email: userData.email,
-      //   role: userData.role,
-      //   student_id: userData.studentId,
-      //   faculty_id: userData.facultyId,
-      // };
+      // Create profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: data.user.id,
+          role: userData.role,
+          student_id: userData.studentId,
+          faculty_id: userData.facultyId,
+        })
+        .select()
+        .single()
       
-      // const { data: newProfile, error: profileError } = await supabase
-      //   .from('profiles')
-      //   .insert(profile)
-      //   .select()
-      //   .single();
+      if (profileError) return { user: null, error: profileError.message }
       
-      // if (profileError) return { user: null, error: profileError.message };
-      
-      // return { user: newProfile, error: null };
-      
-      return { user: null, error: 'Registration not implemented yet' };
-    } catch (error) {
-      return { user: null, error: 'Registration failed' };
+      return { user: profile, error: null }
+    } catch (error: any) {
+      return { user: null, error: error.message }
     }
   }
 
   static async signOut(): Promise<{ error: string | null }> {
     try {
-      // TODO: Connect to Supabase Auth
-      // const { error } = await supabase.auth.signOut();
-      // if (error) return { error: error.message };
+      const { error } = await supabase.auth.signOut()
+      if (error) return { error: error.message }
       
-      localStorage.removeItem('currentUser');
-      return { error: null };
-    } catch (error) {
-      return { error: 'Sign out failed' };
+      localStorage.removeItem('currentUser')
+      return { error: null }
+    } catch (error: any) {
+      return { error: error.message }
     }
   }
 
   static async getCurrentUser(): Promise<UserProfile | null> {
     try {
-      // TODO: Connect to Supabase Auth
-      // const { data: { user } } = await supabase.auth.getUser();
-      // if (!user) return null;
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
       
-      // const { data: profile } = await supabase
-      //   .from('profiles')
-      //   .select('*')
-      //   .eq('id', user.id)
-      //   .single();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
       
-      // return profile;
-      
-      const stored = localStorage.getItem('currentUser');
-      return stored ? JSON.parse(stored) : null;
+      return profile
     } catch (error) {
-      return null;
+      return null
     }
   }
 
   static setCurrentUser(user: UserProfile | null) {
     if (user) {
-      localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem('currentUser', JSON.stringify(user))
     } else {
-      localStorage.removeItem('currentUser');
+      localStorage.removeItem('currentUser')
     }
   }
 }

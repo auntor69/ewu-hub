@@ -38,7 +38,11 @@ export function MyClasses() {
         const roomBookings = data.filter(b => b.resource_kind === 'room');
         setBookings(roomBookings);
       } catch (error) {
-        console.error('Failed to load bookings:', error);
+        toast({
+          title: 'Failed to load bookings',
+          description: error instanceof Error ? error.message : 'Please try again',
+          variant: 'destructive',
+        });
       } finally {
         setLoading(false);
       }
@@ -51,23 +55,19 @@ export function MyClasses() {
     try {
       const success = await BookingService.cancelBooking(booking.id);
       
-      if (success) {
-        setBookings(prev => prev.map(b => 
-          b.id === booking.id ? { ...b, status: 'cancelled' } : b
-        ));
-        setShowCancelDialog(null);
-        toast({
-          title: 'Class cancelled',
-          description: 'Your room booking has been successfully cancelled',
-          variant: 'success',
-        });
-      } else {
-        throw new Error('Failed to cancel booking');
-      }
+      setBookings(prev => prev.map(b => 
+        b.id === booking.id ? { ...b, status: 'cancelled' } : b
+      ));
+      setShowCancelDialog(null);
+      toast({
+        title: 'Class cancelled',
+        description: 'Your room booking has been successfully cancelled',
+        variant: 'success',
+      });
     } catch (error) {
       toast({
         title: 'Cancellation failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     }

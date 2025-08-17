@@ -74,8 +74,16 @@ export function LibraryBooking() {
 
   useEffect(() => {
     const loadRooms = async () => {
-      const roomsData = await ResourceService.listRooms('library_zone');
-      setRooms(roomsData);
+      try {
+        const roomsData = await ResourceService.listRooms('library_zone');
+        setRooms(roomsData);
+      } catch (error: any) {
+        toast({
+          title: 'Failed to load rooms',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     };
     loadRooms();
   }, []);
@@ -83,8 +91,16 @@ export function LibraryBooking() {
   useEffect(() => {
     if (step2Data.room) {
       const loadTables = async () => {
-        const tablesData = await ResourceService.listLibraryTables(step2Data.room);
-        setTables(tablesData);
+        try {
+          const tablesData = await ResourceService.listLibraryTables(step2Data.room);
+          setTables(tablesData);
+        } catch (error: any) {
+          toast({
+            title: 'Failed to load tables',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
       };
       loadTables();
     }
@@ -93,12 +109,27 @@ export function LibraryBooking() {
   useEffect(() => {
     if (step2Data.table) {
       const loadSeats = async () => {
-        const seatsData = await ResourceService.listLibrarySeats(step2Data.table);
-        setSeats(seatsData);
+        try {
+          const selectedRoom = rooms.find(r => r.id === step2Data.room);
+          if (!selectedRoom) return;
+          
+          const startTime = `${step1Data.date}T${step1Data.hour}:00+06:00`;
+          const endHour = parseInt(step1Data.hour.split(':')[0]) + (step1Data.duration || 1);
+          const endTime = `${step1Data.date}T${endHour.toString().padStart(2, '0')}:00:00+06:00`;
+          
+          const seatsData = await ResourceService.listAvailableSeats(selectedRoom.code, startTime, endTime);
+          setSeats(seatsData);
+        } catch (error: any) {
+          toast({
+            title: 'Failed to load seats',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
       };
       loadSeats();
     }
-  }, [step2Data.table]);
+  }, [step2Data.table, step1Data.date, step1Data.hour, step2Data.room, rooms]);
 
   const selectedRoom = rooms.find(r => r.id === step2Data.room);
   const availableTables = tables.filter(t => t.room_id === step2Data.room);
@@ -215,10 +246,13 @@ export function LibraryBooking() {
 
     setLoading(true);
     try {
+      const endHour = parseInt(step1Data.hour.split(':')[0]) + (step1Data.duration || 1);
+      const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+      
       const bookingData = {
         date: step1Data.date,
         start_time: step1Data.hour,
-        end_time: `${parseInt(step1Data.hour.split(':')[0]) + 1}:00`,
+        end_time: endTime,
         room_id: step2Data.room,
         table_id: step2Data.table,
         seat_ids: step2Data.selectedSeats,
@@ -232,12 +266,8 @@ export function LibraryBooking() {
         throw new Error('Failed to create booking');
       }
 
-      // Generate codes for display
-      const totalPeople = 1 + bookingData.friends.length;
-      const codes = Array.from({ length: totalPeople }, () => 
-        Math.random().toString(36).substring(2, 12).toUpperCase()
-      );
-      setGeneratedCodes(codes);
+      // Use the actual attendance code from the booking
+      setGeneratedCodes([booking.attendance_code]);
       setShowSuccessModal(true);
       
       toast({
@@ -248,7 +278,7 @@ export function LibraryBooking() {
     } catch (error) {
       toast({
         title: 'Booking failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {

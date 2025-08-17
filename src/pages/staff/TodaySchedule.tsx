@@ -24,7 +24,11 @@ export function TodaySchedule() {
         const todayBookings = allBookings.filter(b => b.date === today);
         setBookings(todayBookings);
       } catch (error) {
-        console.error('Failed to load today\'s bookings:', error);
+        toast({
+          title: 'Failed to load bookings',
+          description: error instanceof Error ? error.message : 'Please try again',
+          variant: 'destructive',
+        });
       } finally {
         setLoading(false);
       }
@@ -35,8 +39,7 @@ export function TodaySchedule() {
 
   const handleMarkArrived = async (booking: Booking) => {
     try {
-      // TODO: Connect to Supabase
-      // Update booking status to arrived
+      await BookingService.checkInWithCode(booking.attendance_code);
       setBookings(prev => prev.map(b => 
         b.id === booking.id ? { ...b, status: 'arrived' } : b
       ));
@@ -49,7 +52,7 @@ export function TodaySchedule() {
     } catch (error) {
       toast({
         title: 'Update failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     }

@@ -72,25 +72,48 @@ export function LabBooking() {
 
   useEffect(() => {
     const loadData = async () => {
-      const [roomsData, typesData] = await Promise.all([
-        ResourceService.listRooms('lab'),
-        ResourceService.listEquipmentTypes(),
-      ]);
-      setRooms(roomsData);
-      setEquipmentTypes(typesData);
+      try {
+        const [roomsData, typesData] = await Promise.all([
+          ResourceService.listRooms('lab'),
+          ResourceService.listEquipmentTypes(),
+        ]);
+        setRooms(roomsData);
+        setEquipmentTypes(typesData);
+      } catch (error: any) {
+        toast({
+          title: 'Failed to load data',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     };
     loadData();
   }, []);
 
   useEffect(() => {
-    if (step2Data.room && step3Data.equipmentType) {
+    if (step2Data.room && step1Data.date && step1Data.hour) {
       const loadUnits = async () => {
-        const unitsData = await ResourceService.listEquipmentUnits(step2Data.room, step3Data.equipmentType);
-        setEquipmentUnits(unitsData);
+        try {
+          const selectedRoom = rooms.find(r => r.id === step2Data.room);
+          if (!selectedRoom) return;
+          
+          const startTime = `${step1Data.date}T${step1Data.hour}:00+06:00`;
+          const endHour = parseInt(step1Data.hour.split(':')[0]) + 1;
+          const endTime = `${step1Data.date}T${endHour.toString().padStart(2, '0')}:00:00+06:00`;
+          
+          const unitsData = await ResourceService.listAvailableEquipment(selectedRoom.code, startTime, endTime);
+          setEquipmentUnits(unitsData);
+        } catch (error: any) {
+          toast({
+            title: 'Failed to load equipment',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
       };
       loadUnits();
     }
-  }, [step2Data.room, step3Data.equipmentType]);
+  }, [step2Data.room, step1Data.date, step1Data.hour, rooms]);
 
   const selectedRoom = rooms.find(r => r.id === step2Data.room);
   const availableUnits = equipmentUnits.filter(u => u.status === 'available');
@@ -165,7 +188,6 @@ export function LabBooking() {
         start_time: step1Data.hour,
         end_time: `${parseInt(step1Data.hour.split(':')[0]) + 1}:00`,
         room_id: step2Data.room,
-        equipment_type_id: step3Data.equipmentType,
         equipment_unit_id: step3Data.equipmentUnit,
         notes: step3Data.notes,
       };
@@ -176,8 +198,7 @@ export function LabBooking() {
         throw new Error('Failed to create booking');
       }
 
-      const code = Math.random().toString(36).substring(2, 12).toUpperCase();
-      setGeneratedCode(code);
+      setGeneratedCode(booking.attendance_code);
       setShowSuccessModal(true);
       
       toast({
@@ -188,7 +209,7 @@ export function LabBooking() {
     } catch (error) {
       toast({
         title: 'Booking failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {

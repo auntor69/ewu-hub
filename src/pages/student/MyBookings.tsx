@@ -37,7 +37,11 @@ export function MyBookings() {
         const data = await BookingService.listBookings(currentUser.id);
         setBookings(data);
       } catch (error) {
-        console.error('Failed to load bookings:', error);
+        toast({
+          title: 'Failed to load bookings',
+          description: error instanceof Error ? error.message : 'Please try again',
+          variant: 'destructive',
+        });
       } finally {
         setLoading(false);
       }
@@ -50,23 +54,19 @@ export function MyBookings() {
     try {
       const success = await BookingService.cancelBooking(booking.id);
       
-      if (success) {
-        setBookings(prev => prev.map(b => 
-          b.id === booking.id ? { ...b, status: 'cancelled' } : b
-        ));
-        setShowCancelDialog(null);
-        toast({
-          title: 'Booking cancelled',
-          description: 'Your booking has been successfully cancelled',
-          variant: 'success',
-        });
-      } else {
-        throw new Error('Failed to cancel booking');
-      }
+      setBookings(prev => prev.map(b => 
+        b.id === booking.id ? { ...b, status: 'cancelled' } : b
+      ));
+      setShowCancelDialog(null);
+      toast({
+        title: 'Booking cancelled',
+        description: 'Your booking has been successfully cancelled',
+        variant: 'success',
+      });
     } catch (error) {
       toast({
         title: 'Cancellation failed',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     }

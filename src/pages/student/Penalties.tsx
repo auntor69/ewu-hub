@@ -33,7 +33,11 @@ export function Penalties() {
         const data = await PenaltyService.listPenalties(currentUser.id);
         setPenalties(data);
       } catch (error) {
-        console.error('Failed to load penalties:', error);
+        toast({
+          title: 'Failed to load penalties',
+          description: error instanceof Error ? error.message : 'Please try again',
+          variant: 'destructive',
+        });
       } finally {
         setLoading(false);
       }

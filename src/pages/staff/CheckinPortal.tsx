@@ -42,7 +42,7 @@ export function CheckinPortal() {
     } catch (error) {
       toast({
         title: 'Check-in error',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {

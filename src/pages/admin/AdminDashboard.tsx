@@ -16,6 +16,7 @@ export function AdminDashboard() {
         setStats(data);
       } catch (error) {
         console.error('Failed to load statistics:', error);
+        // Don't show error toast on dashboard, just log it
       } finally {
         setLoading(false);
       }
