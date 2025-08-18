@@ -10,16 +10,15 @@ import { BookingService, ResourceService } from '../../lib/api';
 import { AuthService } from '../../lib/auth';
 import { useToast } from '../../hooks/useToast';
 import { cn, formatDate, formatTime } from '../../lib/utils';
-import { Room, LibraryTable, LibrarySeat } from '../../lib/types';
+import { Room, LibraryTable, LibrarySeat, UserProfile } from '../../lib/types';
 
 interface BookingStep1Data {
   date: string;
   hour: string;
+  duration: number;
 }
 
 interface BookingStep2Data {
-  room: string;
-  table: string;
   selectedSeats: string[];
 }
 
@@ -28,11 +27,15 @@ interface BookingStep3Data {
   notes: string;
 }
 
-const hours = Array.from({ length: 12 }, (_, i) => {
+const hours = Array.from({ length: 11 }, (_, i) => {
   const hour = 8 + i;
   return `${hour.toString().padStart(2, '0')}:00`;
 });
 
+const durations = [
+  { value: 1, label: '1 hour' },
+  { value: 2, label: '2 hours' }
+];
 export function LibraryBooking() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -40,20 +43,18 @@ export function LibraryBooking() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [tables, setTables] = useState<LibraryTable[]>([]);
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [seats, setSeats] = useState<LibrarySeat[]>([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
 
   const [step1Data, setStep1Data] = useState<BookingStep1Data>({
     date: '',
     hour: '',
+    duration: 1,
   });
 
   const [step2Data, setStep2Data] = useState<BookingStep2Data>({
-    room: '',
-    table: '',
     selectedSeats: [],
   });
 
@@ -73,51 +74,18 @@ export function LibraryBooking() {
   }, []);
 
   useEffect(() => {
-    const loadRooms = async () => {
-      try {
-        const roomsData = await ResourceService.listRooms('library_zone');
-        setRooms(roomsData);
-      } catch (error: any) {
-        toast({
-          title: 'Failed to load rooms',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
-    };
-    loadRooms();
-  }, []);
-
-  useEffect(() => {
-    if (step2Data.room) {
-      const loadTables = async () => {
-        try {
-          const tablesData = await ResourceService.listLibraryTables(step2Data.room);
-          setTables(tablesData);
-        } catch (error: any) {
-          toast({
-            title: 'Failed to load tables',
-            description: error.message,
-            variant: 'destructive',
-          });
-        }
-      };
-      loadTables();
-    }
-  }, [step2Data.room]);
-
-  useEffect(() => {
-    if (step2Data.table) {
+    if (step1Data.date && step1Data.hour && step1Data.duration) {
       const loadSeats = async () => {
+        setLoadingSeats(true);
         try {
-          const selectedRoom = rooms.find(r => r.id === step2Data.room);
-          if (!selectedRoom) return;
+          const startHour = parseInt(step1Data.hour.split(':')[0]);
+          const endHour = startHour + step1Data.duration;
           
+          // Fixed room: LIB-601
           const startTime = `${step1Data.date}T${step1Data.hour}:00+06:00`;
-          const endHour = parseInt(step1Data.hour.split(':')[0]) + (step1Data.duration || 1);
           const endTime = `${step1Data.date}T${endHour.toString().padStart(2, '0')}:00:00+06:00`;
           
-          const seatsData = await ResourceService.listAvailableSeats(selectedRoom.code, startTime, endTime);
+          const seatsData = await ResourceService.listAvailableSeats('LIB-601', startTime, endTime);
           setSeats(seatsData);
         } catch (error: any) {
           toast({
@@ -125,21 +93,21 @@ export function LibraryBooking() {
             description: error.message,
             variant: 'destructive',
           });
+          setSeats([]);
+        } finally {
+          setLoadingSeats(false);
         }
       };
       loadSeats();
     }
-  }, [step2Data.table, step1Data.date, step1Data.hour, step2Data.room, rooms]);
-
-  const selectedRoom = rooms.find(r => r.id === step2Data.room);
-  const availableTables = tables.filter(t => t.room_id === step2Data.room);
-  const selectedTableSeats = seats.filter(s => s.table_id === step2Data.table);
+  }, [step1Data.date, step1Data.hour, step1Data.duration]);
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
     
     if (!step1Data.date) newErrors.date = 'Please select a date';
     if (!step1Data.hour) newErrors.hour = 'Please select an hour';
+    if (!step1Data.duration) newErrors.duration = 'Please select duration';
 
     // Check if selected date is Friday or Saturday
     if (step1Data.date) {
@@ -150,7 +118,16 @@ export function LibraryBooking() {
       }
     }
 
-    // Check booking window (3 days ahead for students)
+    // Check if end time is within opening hours
+    if (step1Data.hour && step1Data.duration) {
+      const startHour = parseInt(step1Data.hour.split(':')[0]);
+      const endHour = startHour + step1Data.duration;
+      if (endHour > 19) {
+        newErrors.hour = 'Booking would extend beyond closing time (19:00)';
+      }
+    }
+
+    // Check booking window (3 days ahead for students) 
     if (step1Data.date) {
       const selectedDate = new Date(step1Data.date);
       const maxDate = new Date();
@@ -167,8 +144,6 @@ export function LibraryBooking() {
   const validateStep2 = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!step2Data.room) newErrors.room = 'Please select a room';
-    if (!step2Data.table) newErrors.table = 'Please select a table';
     if (step2Data.selectedSeats.length === 0) newErrors.seats = 'Please select at least one seat';
     if (step2Data.selectedSeats.length > 6) newErrors.seats = 'Maximum 6 seats allowed';
 
@@ -246,15 +221,13 @@ export function LibraryBooking() {
 
     setLoading(true);
     try {
-      const endHour = parseInt(step1Data.hour.split(':')[0]) + (step1Data.duration || 1);
+      const endHour = parseInt(step1Data.hour.split(':')[0]) + step1Data.duration;
       const endTime = `${endHour.toString().padStart(2, '0')}:00`;
       
       const bookingData = {
         date: step1Data.date,
         start_time: step1Data.hour,
         end_time: endTime,
-        room_id: step2Data.room,
-        table_id: step2Data.table,
         seat_ids: step2Data.selectedSeats,
         friends: step3Data.friends.filter(f => f.trim()),
         notes: step3Data.notes,
@@ -267,7 +240,7 @@ export function LibraryBooking() {
       }
 
       // Use the actual attendance code from the booking
-      setGeneratedCodes([booking.attendance_code]);
+      setGeneratedCode(booking.attendance_code);
       setShowSuccessModal(true);
       
       toast({
@@ -310,10 +283,26 @@ export function LibraryBooking() {
     return maxDate.toISOString().split('T')[0];
   };
 
-  const isDateDisabled = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const dayOfWeek = date.getDay();
-    return dayOfWeek === 5 || dayOfWeek === 6; // Friday or Saturday
+  // Generate seat map (20 tables × 6 seats = 120 seats)
+  const generateSeatMap = () => {
+    const seatMap = [];
+    for (let table = 1; table <= 20; table++) {
+      for (let seat = 1; seat <= 6; seat++) {
+        const seatId = `T${table}-S${seat}`;
+        const isAvailable = seats.some(s => s.label === seatId);
+        const isSelected = step2Data.selectedSeats.includes(seatId);
+        
+        seatMap.push({
+          id: seatId,
+          table,
+          seat,
+          available: isAvailable,
+          selected: isSelected,
+          occupied: !isAvailable && !isSelected
+        });
+      }
+    }
+    return seatMap;
   };
 
   return (
@@ -324,7 +313,7 @@ export function LibraryBooking() {
           <p className="text-slate-600">Reserve seats for individual or group study</p>
         </div>
         <div className="text-sm text-slate-500">
-          Step {currentStep} of 3
+          Step {currentStep} of 3 • LIB-601 Main Library
         </div>
       </div>
 
@@ -345,7 +334,7 @@ export function LibraryBooking() {
                 'font-medium',
                 step <= currentStep ? 'text-purple-600' : 'text-slate-500'
               )}>
-                {step === 1 && 'Date & Time'}
+                {step === 1 && 'Date, Time & Duration'}
                 {step === 2 && 'Choose Seats'}
                 {step === 3 && 'Review & Confirm'}
               </div>
@@ -360,12 +349,12 @@ export function LibraryBooking() {
         ))}
       </div>
 
-      {/* Step 1: Select Date & Hour */}
+      {/* Step 1: Select Date, Hour & Duration */}
       {currentStep === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Select Date & Hour</CardTitle>
-            <CardDescription>Choose your study date and time slot</CardDescription>
+            <CardTitle>Select Date, Time & Duration</CardTitle>
+            <CardDescription>Choose your study session details</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
@@ -403,8 +392,27 @@ export function LibraryBooking() {
               {errors.hour && <p className="text-sm text-red-600 mt-1">{errors.hour}</p>}
             </div>
 
+            <div>
+              <Label>Duration</Label>
+              <div className="flex gap-3 mt-2">
+                {durations.map((duration) => (
+                  <Button
+                    key={duration.value}
+                    variant={step1Data.duration === duration.value ? 'default' : 'outline'}
+                    onClick={() => setStep1Data(prev => ({ ...prev, duration: duration.value }))}
+                    className="h-12"
+                  >
+                    {duration.label}
+                  </Button>
+                ))}
+              </div>
+              {errors.duration && <p className="text-sm text-red-600 mt-1">{errors.duration}</p>}
+              <p className="text-sm text-slate-500 mt-1">
+                Library bookings must be exactly 1 or 2 hours
+              </p>
+            </div>
             <div className="flex justify-end">
-              <Button onClick={handleStep1Next} disabled={!step1Data.date || !step1Data.hour}>
+              <Button onClick={handleStep1Next} disabled={!step1Data.date || !step1Data.hour || !step1Data.duration}>
                 Next Step
                 <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
@@ -413,148 +421,96 @@ export function LibraryBooking() {
         </Card>
       )}
 
-      {/* Step 2: Choose Zone/Table/Seat */}
+      {/* Step 2: Choose Seats */}
       {currentStep === 2 && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Select Room & Table</CardTitle>
-              <CardDescription>Choose your study location</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Library Seat Map - LIB-601</CardTitle>
+            <CardDescription>
+              Click seats to select (max 6) • {formatDate(step1Data.date)} at {formatTime(step1Data.hour)} for {step1Data.duration}h
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingSeats ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                <p className="text-slate-500">Loading seat availability...</p>
+              </div>
+            ) : (
               <div>
-                <Label htmlFor="room">Library Room</Label>
-                <select
-                  id="room"
-                  value={step2Data.room}
-                  onChange={(e) => setStep2Data(prev => ({ ...prev, room: e.target.value, table: '', selectedSeats: [] }))}
-                  className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Select a room</option>
-                  {rooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.code} - {room.name} (Capacity: {room.capacity})
-                    </option>
+                <div className="grid grid-cols-6 gap-2 mb-6">
+                  {generateSeatMap().map((seat) => (
+                    <Button
+                      key={seat.id}
+                      variant={
+                        seat.selected
+                          ? 'default'
+                          : seat.occupied
+                          ? 'destructive'
+                          : 'outline'
+                      }
+                      disabled={seat.occupied}
+                      onClick={() => handleSeatToggle(seat.id)}
+                      className="h-12 p-1 text-xs"
+                      title={`Table ${seat.table}, Seat ${seat.seat}`}
+                    >
+                      <div className="text-center">
+                        <div>{seat.id}</div>
+                      </div>
+                    </Button>
                   ))}
-                </select>
-                {errors.room && <p className="text-sm text-red-600 mt-1">{errors.room}</p>}
-              </div>
-
-              {step2Data.room && (
-                <div>
-                  <Label htmlFor="table">Table</Label>
-                  <select
-                    id="table"
-                    value={step2Data.table}
-                    onChange={(e) => setStep2Data(prev => ({ ...prev, table: e.target.value, selectedSeats: [] }))}
-                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="">Select a table</option>
-                    {availableTables.map((table) => (
-                      <option key={table.id} value={table.id}>
-                        Table T{table.table_number} ({table.seat_count} seats)
-                      </option>
-                    ))}
-                  </select>
-                  {errors.table && <p className="text-sm text-red-600 mt-1">{errors.table}</p>}
                 </div>
-              )}
 
-              <div className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Previous
-                </Button>
+                <div className="border-t pt-4 mb-4">
+                  <div className="text-sm font-medium mb-2">Legend</div>
+                  <div className="flex flex-wrap gap-4 text-xs">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border border-slate-300 rounded bg-white"></div>
+                      <span>Available</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 bg-purple-600 rounded"></div>
+                      <span>Selected</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 bg-red-500 rounded"></div>
+                      <span>Occupied</span>
+                    </div>
+                  </div>
+                </div>
+
                 {step2Data.selectedSeats.length > 0 && (
-                  <Button onClick={handleStep2Next}>
-                    Next Step
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
+                  <div className="p-3 bg-purple-50 rounded-lg mb-4">
+                    <div className="text-sm font-medium text-purple-900 mb-1">
+                      Selected: {step2Data.selectedSeats.length} seat(s)
+                    </div>
+                    <div className="text-xs text-purple-700">
+                      Seats: {step2Data.selectedSeats.join(', ')}
+                    </div>
+                  </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Seat Map</CardTitle>
-              <CardDescription>Click seats to select (max 6)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {step2Data.table && selectedTableSeats.length > 0 ? (
-                <div>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    {selectedTableSeats.map((seat) => (
-                      <Button
-                        key={seat.id}
-                        variant={
-                          step2Data.selectedSeats.includes(seat.id)
-                            ? 'default'
-                            : seat.status === 'occupied'
-                            ? 'destructive'
-                            : 'outline'
-                        }
-                        disabled={seat.status === 'occupied'}
-                        onClick={() => handleSeatToggle(seat.id)}
-                        className="h-16 p-2"
-                      >
-                        <div className="text-center">
-                          <div className="text-xs">S{seat.seat_number}</div>
-                          <div className="text-xs opacity-75 mt-1">
-                            {seat.status === 'occupied' ? 'Occupied' : 
-                             step2Data.selectedSeats.includes(seat.id) ? 'Selected' : 'Available'}
-                          </div>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
+                {errors.seats && <p className="text-sm text-red-600 mb-4">{errors.seats}</p>}
 
-                  <div className="border-t pt-4">
-                    <div className="text-sm font-medium mb-2">Legend</div>
-                    <div className="flex flex-wrap gap-4 text-xs">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 border border-slate-300 rounded bg-white"></div>
-                        <span>Available</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 bg-purple-600 rounded"></div>
-                        <span>Selected</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 bg-red-500 rounded"></div>
-                        <span>Occupied</span>
-                      </div>
-                    </div>
-                  </div>
-
+                <div className="flex justify-between">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Previous
+                  </Button>
                   {step2Data.selectedSeats.length > 0 && (
-                    <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-                      <div className="text-sm font-medium text-purple-900 mb-1">
-                        Selected: {step2Data.selectedSeats.length} seat(s)
-                      </div>
-                      <div className="text-xs text-purple-700">
-                        Seats: {step2Data.selectedSeats.map(seatId => {
-                          const seat = selectedTableSeats.find(s => s.id === seatId);
-                          return `S${seat?.seat_number}`;
-                        }).join(', ')}
-                      </div>
-                    </div>
+                    <Button onClick={handleStep2Next}>
+                      Next Step
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
                   )}
-
-                  {errors.seats && <p className="text-sm text-red-600 mt-2">{errors.seats}</p>}
                 </div>
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <MapPin className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Select a room and table to view seat map</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Step 3: Add Friends & Review */}
@@ -630,22 +586,19 @@ export function LibraryBooking() {
                 <div>
                   <div className="text-sm text-slate-600 mb-1">Date & Time</div>
                   <div className="font-medium">
-                    {formatDate(step1Data.date)} at {formatTime(step1Data.hour)}
+                    {formatDate(step1Data.date)} at {formatTime(step1Data.hour)} ({step1Data.duration}h)
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-slate-600 mb-1">Location</div>
                   <div className="font-medium">
-                    {selectedRoom?.code} - Table T{availableTables.find(t => t.id === step2Data.table)?.table_number}
+                    LIB-601 Main Library
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-slate-600 mb-1">Selected Seats</div>
                   <div className="font-medium">
-                    {step2Data.selectedSeats.map(seatId => {
-                      const seat = selectedTableSeats.find(s => s.id === seatId);
-                      return `S${seat?.seat_number}`;
-                    }).join(', ')} ({step2Data.selectedSeats.length} seat{step2Data.selectedSeats.length !== 1 ? 's' : ''})
+                    {step2Data.selectedSeats.join(', ')} ({step2Data.selectedSeats.length} seat{step2Data.selectedSeats.length !== 1 ? 's' : ''})
                   </div>
                 </div>
                 <div>
@@ -682,28 +635,22 @@ export function LibraryBooking() {
           <DialogHeader>
             <DialogTitle>Booking Confirmed! 🎉</DialogTitle>
             <DialogDescription>
-              Your library seats have been successfully reserved. Here are your attendance codes:
+              Your library seats have been successfully reserved. Here is your attendance code:
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-3">
-            {generatedCodes.map((code, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                <div>
-                  <div className="text-sm font-medium">
-                    {index === 0 ? 'You' : `Friend ${index}`}
-                  </div>
-                  <div className="font-mono text-sm text-purple-900">{code}</div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => copyCode(code)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+          <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+            <div>
+              <div className="text-sm font-medium">Attendance Code</div>
+              <div className="font-mono text-sm text-purple-900">{generatedCode}</div>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => copyCode(generatedCode)}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
           </div>
 
           <div className="text-center pt-4">

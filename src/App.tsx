@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/Toaster';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { AppShell } from './components/AppShell';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Landing } from './pages/Landing';
@@ -21,6 +22,7 @@ import { Penalties } from './pages/student/Penalties';
 
 function App() {
   return (
+    <AppErrorBoundary>
     <BrowserRouter>
       <div className="min-h-screen bg-slate-50">
         <Routes>
@@ -153,6 +155,7 @@ function App() {
         <Toaster />
       </div>
     </BrowserRouter>
+    </AppErrorBoundary>
   );
 }
 
